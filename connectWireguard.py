@@ -1,12 +1,66 @@
+# Usage: sudo python3 connectWireguard.py [-C / -D] /path/to/conf
+#        sudo python3 connectWireguard.py [-DA / -S]
+# sudo is needed to issue wireguard commands
+# -C will connect the config file specified by the path: CONNECT
+# -D will disconnect the specified config file: DISCONNECT
+# -DA will disconnect all active interfaces: DISCONNECT ALL
+# -S will show all active interfaces, equivalent to "wg show"
+
 import subprocess
 import sys
 import re
 
+def connection(action, confname):
+    runWireguard = "wg-quick "+action+" "+confname
+    process = subprocess.Popen(runWireguard.split(), stdout=subprocess.PIPE)
+    output, error = process.communicate()
+
+def get_interfaces(show_info):
+    show_interfaces = "wg show"
+    process = subprocess.Popen(show_interfaces.split(), stdout=subprocess.PIPE)
+    output, error = process.communicate()
+    interfaces = output.decode("UTF-8")
+    if len(interfaces) == 0:
+        print("No active interface in Wireguard")
+        exit(1)
+    if show_info == True:
+        print(interfaces)
+    else: 
+        interfaces = interfaces.split("interface: ")
+        for interface in range(len(interfaces) - 1):
+            confname = interfaces[interface + 1].split( )[0]
+            connection("down", confname)
+
+Usage = "Usage: sudo python connectWireguard.py [-C / -D] /path/to/conf\n     : sudo python connectWireguard.py [-DA / -S]"
+action = None
 path = None
+
 try: 
-    path = sys.argv[1]
+    action = sys.argv[1]
 except:
-    print("Usage: sudo python connectWireguard.py /path/to/conf")
+    print(Usage)
+    exit(1)
+
+actions = ["-C", "-D", "-DA", "-S"]
+
+if action not in actions:     
+    print("Please specify action: [-C / -D / -DA / -S]")
+    exit(1)
+
+# Show all interfaces
+if action == "-S":
+    get_interfaces(True)
+    exit(1)
+
+# Disconnect all
+elif action == "-DA":
+    get_interfaces(False)
+    exit(1)
+
+try: 
+    path = sys.argv[2]
+except:
+    print(Usage)
     exit(1)
 
 lines = []
@@ -31,7 +85,7 @@ try:
     with open("/etc/wireguard/"+filename,"w") as file:
         for item in lines:
             file.write(item)
-        
+            
 except:
     print("Failed to open file /etc/wireguard/" + filename + ".\n Are you root?")
     exit(1)
@@ -61,7 +115,12 @@ with open("/etc/hosts", "r") as file:
             for line in currenthost:
                 file2.write(line)
 
+#Then disconnect the given conf
+if action == "-D":
+    connection("down", confname)
+    exit(1)
+
 #Then connect with wireguard
-runWireguard = "wg-quick up "+confname
-process = subprocess.Popen(runWireguard.split(), stdout=subprocess.PIPE)
-output, error = process.communicate()
+elif action == "-C":
+    connection("up", confname)
+    exit(1)
